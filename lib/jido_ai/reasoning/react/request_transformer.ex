@@ -18,7 +18,10 @@ defmodule Jido.AI.Reasoning.ReAct.RequestTransformer do
     breaking Fireworks turns on the same agent.
 
   The runtime always regenerates `llm_opts[:tools]` from the returned `tools`
-  field so the exposed LLM tools and execution registry stay aligned.
+  field so the exposed LLM tools and execution registry stay aligned. To change
+  the generated definitions, implement the optional `transform_tool_definitions/4`
+  callback. It runs after tool selection and regeneration, before ReqLLM encodes
+  the provider request, for both streaming and non-streaming turns.
   """
 
   alias Jido.AI.Reasoning.ReAct.{Config, State, ToolSelection}
@@ -71,4 +74,25 @@ defmodule Jido.AI.Reasoning.ReAct.RequestTransformer do
 
   @callback transform_request(request(), State.t(), Config.t(), map()) ::
               {:ok, overrides()} | {:error, term()}
+
+  @doc """
+  Transform the final tool definitions sent to the LLM on each turn.
+
+  Receives the regenerated `ReqLLM.Tool` structs, current runtime state, original
+  config, and the same runtime context passed to `transform_request/4`. This can
+  customize descriptions or parameter schemas without replacing the action
+  execution registry. Use `transform_request/4` to change which actions are available.
+
+  Return `{:ok, tools}` with one `ReqLLM.Tool` for each input tool, preserving
+  names. Order may change. Adding, removing, renaming, or duplicating tools is
+  rejected. The callback is responsible for valid descriptions and schemas.
+  Modules that omit this callback retain the generated definitions unchanged.
+
+  `{:error, reason}`, malformed results, and exceptions terminate the request
+  with a `:request_transform` error before contacting the provider.
+  """
+  @callback transform_tool_definitions([ReqLLM.Tool.t()], State.t(), Config.t(), map()) ::
+              {:ok, [ReqLLM.Tool.t()]} | {:error, term()}
+
+  @optional_callbacks transform_tool_definitions: 4
 end
