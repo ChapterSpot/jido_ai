@@ -439,3 +439,24 @@ Fix:
 - [Tool Calling With Actions](tool_calling_with_actions.md)
 - [Request Lifecycle And Concurrency](request_lifecycle_and_concurrency.md)
 - [Strategy Selection Playbook](strategy_selection_playbook.md)
+
+### Customizing generated tool definitions
+
+A configured request transformer can optionally implement
+`transform_tool_definitions/4`. The runner calls it after `transform_request/4`
+and tool regeneration, before ReqLLM builds either a streaming or non-streaming
+provider request. It receives the generated `ReqLLM.Tool` list, runtime state,
+original config, and runtime context.
+
+```elixir
+def transform_tool_definitions(tools, _state, _config, context) do
+  {:ok, Enum.map(tools, fn tool ->
+    %{tool | description: Map.get(context[:tool_descriptions] || %{}, tool.name, tool.description)}
+  end)}
+end
+```
+
+Keep each tool's name and return one definition per input tool. The action
+execution registry stays unchanged. Select or remove actions through
+`transform_request/4` instead. Return `{:error, reason}` to stop the turn before
+sending a provider request. Existing transformers need no changes.
